@@ -17,34 +17,30 @@
 
 set -e
 
-VERSION="$1"
-SOURCE_TMP="/tmp/.csvql"
-SOURCE="$HOME/.csvql"
-BASH_PROFILE="$HOME/.csvql_profile"
+# Install sqlite3
+./bin/sqlite3-install
 
-if [ -z "$VERSION" ]; then
-	VERSION="main"
+# Install csvql
+VERSION_DEFAULT="main"
+VERSION="${1:-$VERSION_DEFAULT}"
+GIT_REPOSITORY="git@github.com:adrianolaselva/csvql.git"
+SOURCE_TMP_INSTALL="/tmp/csvql-cli"
+SOURCE_INSTALL_DEST="/usr/local/csvql-cli"
+
+if [ -d "$SOURCE_TMP_INSTALL" ]; then
+	rm -rf $SOURCE_TMP_INSTALL
 fi
 
-if [ -d "$SOURCE_TMP" ]; then
-	rm -rf $SOURCE_TMP
+if [ -d "$SOURCE_INSTALL_DEST" ]; then
+	sudo rm -rf $SOURCE_INSTALL_DEST
 fi
 
-(git clone -b $VERSION git@github.com:adrianolaselva/csvql.git $SOURCE_TMP && cd $SOURCE_TMP && make build)
+(git clone -b $VERSION "$GIT_REPOSITORY" $SOURCE_TMP_INSTALL && cd $SOURCE_TMP_INSTALL && make build)
 
-chmod +x "$SOURCE_TMP/csvql"
-mkdir -p "$SOURCE/bin/"
-cp "$SOURCE_TMP/csvql" "$SOURCE/bin/"
-rm -rf $SOURCE_TMP
+(sudo mkdir -p $SOURCE_INSTALL_DEST && sudo cp "$SOURCE_TMP_INSTALL/csvql" $SOURCE_INSTALL_DEST)
 
-if [ -d "$BASH_PROFILE" ]; then
-	rm -rf $BASH_PROFILE
-fi
+sudo ln -s "$SOURCE_INSTALL_DEST/csvql" /usr/local/bin/csvql
 
-touch "$BASH_PROFILE"
-echo -e "export PATH=\"$SOURCE/bin:$PATH\"" > $BASH_PROFILE
-source $BASH_PROFILE
+source ~/.bash_profile
 
-CSVQL_BIN=$(which csvql)
-echo "csvql install path: ${CSVQL_BIN}"
 echo "Successfully installed csvql version $VERSION!!!"
