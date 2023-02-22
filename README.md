@@ -45,6 +45,13 @@ curl -s "https://raw.githubusercontent.com/adrianolaselva/csvql/v1.0.0/bin/insta
 
 **Note: Soon you can also choose to download the binary install and use it**
 
+## Uninstallation
+
+```sh
+curl -s "https://raw.githubusercontent.com/adrianolaselva/csvql/main/bin/install" | bash
+```
+> Uninstall tool.
+
 ## Usage
 
 Once installed, just run the command below passing a CSV file as a parameter through the `-f` flag and the delimiter 
@@ -74,6 +81,10 @@ origin_id    description                    metric_value   metric_date
 1008060883   Rio de Janeiro Sales Revenue   0,39           01/02/2023
 ```
 > Example of SQL execution after loading `.csv` file.
+
+## References
+
+- [sqlite database](https://www.tutorialspoint.com/sqlite/index.htm)
 
 ## License
 
