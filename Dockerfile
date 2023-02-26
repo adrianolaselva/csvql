@@ -4,13 +4,16 @@ ARG VERSION
 
 ENV VERSION=$VERSION
 ENV GOOS=linux
-ENV GOARCH=amd64
+ENV CGO_ENABLED=0
 
 WORKDIR /app
 
+ADD go.mod go.sum ./
+RUN go mod download
+
 COPY . .
 
-RUN GOOS=linux GOARCH=amd64 go build -a -ldflags="-s -w" -o csvql ./
+RUN CGO_ENABLED=1 GOOS=linux go build -a -ldflags="-s -w" -o csvql ./
 
 FROM debian:sid-slim
 

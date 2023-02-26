@@ -62,7 +62,7 @@ csvql run -f test.csv -d ";"
 ```
 > Example initializing a file named `test.csv` using `;` as delimiter.
 
-**Example:**
+**Example using iterative mode:**
 
 Below is an example of how the tool works, importing a csv file delimited by the character `;`.
 
@@ -81,6 +81,32 @@ origin_id    description                    metric_value   metric_date
 1008060883   Rio de Janeiro Sales Revenue   0,39           01/02/2023
 ```
 > Example of SQL execution after loading `.csv` file.
+
+**Example just running query:**
+
+Below is an example of how the tool works, importing a csv file delimited by the `;` character and passing the query as a parameter.
+
+```sh
+csvql run -f test.csv -d ";" \ 
+  -q "select origin_id, description, metric_value, metric_date from rows limit 10;"
+```
+> Example initializing a file named `test.csv` using `;` as delimiter and passing query to execution.
+
+```shell
+[1/1] loading data... 100% [====================================================] (1.6 kB/s) 
+origin_id    description                    metric_value   metric_date  
+1007549851   Amazon Sales Revenue           0,35           01/02/2023   
+1007549852   Bahia Sales Revenue            0,21           01/02/2023   
+1007683973   Ceará Sales Revenue            0,65           01/02/2023   
+1007710146   Espírito Santo Sales Revenue   0,58           01/02/2023   
+1007772105   Goiás Sales Revenue            0,06           01/02/2023   
+1007778716   Maranhão Sales Revenue         0,65           01/02/2023   
+1007780734   Mato Grosso Sales Revenue      0,23           01/02/2023   
+1007789224   São Paulo Sales Revenue        0,48           01/02/2023   
+1007975972   Tocantins Sales Revenue        3,01           01/02/2023   
+1008060883   Rio de Janeiro Sales Revenue   0,39           01/02/2023
+```
+> Example of SQL execution after loading the `.csv` file and executing the query passed by parameter.
 
 ## References
 

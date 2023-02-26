@@ -60,6 +60,8 @@ func New(params CsvqlParams) Csvql {
 }
 
 func (c *csvql) Run() error {
+	defer c.close()
+
 	if err := c.loadTotalRows(); err != nil {
 		return err
 	}
@@ -67,15 +69,21 @@ func (c *csvql) Run() error {
 	if err := c.openFile(); err != nil {
 		return err
 	}
-	defer c.file.Close()
 
 	if err := c.openConnection(); err != nil {
 		return err
 	}
-	defer c.db.Close()
 
 	if err := c.loadDataFromFile(); err != nil {
 		return err
+	}
+
+	return c.execute()
+}
+
+func (c *csvql) execute() error {
+	if c.params.Query != "" {
+		return c.executeQuery(c.params.Query)
 	}
 
 	if err := c.initializePrompt(); err != nil {
@@ -83,6 +91,16 @@ func (c *csvql) Run() error {
 	}
 
 	return nil
+}
+
+func (c *csvql) close() {
+	if err := c.file.Close(); err != nil {
+		fmt.Fprintf(os.Stderr, "%s\n", err.Error())
+	}
+
+	if err := c.db.Close(); err != nil {
+		fmt.Fprintf(os.Stderr, "%s\n", err.Error())
+	}
 }
 
 func (c *csvql) initializePrompt() error {
@@ -115,7 +133,7 @@ func (c *csvql) initializePrompt() error {
 		}
 
 		line = strings.TrimSpace(line)
-		if err := c.execute(line); err != nil {
+		if err := c.executeQuery(line); err != nil {
 			fmt.Fprintf(os.Stderr, "%s\n", err.Error())
 		}
 	}
@@ -123,7 +141,7 @@ func (c *csvql) initializePrompt() error {
 	return nil
 }
 
-func (c *csvql) execute(line string) error {
+func (c *csvql) executeQuery(line string) error {
 	rows, err := c.db.Query(line)
 	if err != nil {
 		return err
@@ -163,6 +181,7 @@ func (c *csvql) printResult(rows *sql.Rows) error {
 		tbl.AddRow(values...)
 	}
 
+	fmt.Printf("\n")
 	tbl.Print()
 
 	return nil
