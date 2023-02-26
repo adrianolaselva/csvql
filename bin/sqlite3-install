@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+
+#
+#   Copyright 2023 Adriano M. La Selva
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+
+set -e
+
+# Install sqlite3
+SQLITE_TMP_INSTALL="/tmp/sqlite3"
+SQLITE_URL="https://www.sqlite.org/2023/sqlite-autoconf-3410000.tar.gz"
+if ! [ -x "$(command -v sqlite3)" ]; then
+  echo "Installing sqlite3..."
+  (wget -P $SQLITE_TMP_INSTALL $SQLITE_URL  && cd $SQLITE_TMP_INSTALL && tar xvfz sqlite-autoconf-3410000.tar.gz && cd sqlite-autoconf-3410000 && ./configure --prefix=/usr/local && make && make install)
+  echo "Successfully installed sqlite3 version: $(sqlite3 --version)"
+else
+    echo "sqlite3 already installed version: $(sqlite3 --version)"
+fi
