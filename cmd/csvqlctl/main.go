@@ -1,7 +1,7 @@
 package csvqlctl
 
 import (
-	"adrianolaselva.github.io/csvql/pkg/csvql"
+	csvql2 "adrianolaselva.github.io/csvql/internal/csvql"
 	"github.com/spf13/cobra"
 )
 
@@ -23,7 +23,7 @@ type CsvQlCtl interface {
 
 type csvQlCtl struct {
 	rootCmd *cobra.Command
-	params  csvql.CsvqlParams
+	params  csvql2.CsvqlParams
 }
 
 func New() CsvQlCtl {
@@ -63,5 +63,5 @@ func (c *csvQlCtl) Command() (*cobra.Command, error) {
 }
 
 func (c *csvQlCtl) runE(_ *cobra.Command, _ []string) error {
-	return csvql.New(c.params).Run()
+	return csvql2.New(c.params).Run()
 }

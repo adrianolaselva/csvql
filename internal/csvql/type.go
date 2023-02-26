@@ -6,3 +6,12 @@ type CsvqlParams struct {
 	Delimiter      string
 	Query          string
 }
+
+type CsvqlImport interface {
+	Import() error
+	Close() error
+}
+
+type CsvqlExport interface {
+	Export() error
+}

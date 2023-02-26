@@ -83,6 +83,7 @@ func (c *csvql) Run() error {
 
 func (c *csvql) execute() error {
 	if c.params.Query != "" {
+		fmt.Printf("\n")
 		return c.executeQuery(c.params.Query)
 	}
 
@@ -181,7 +182,6 @@ func (c *csvql) printResult(rows *sql.Rows) error {
 		tbl.AddRow(values...)
 	}
 
-	fmt.Printf("\n")
 	tbl.Print()
 
 	return nil
