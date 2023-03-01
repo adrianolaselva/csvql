@@ -5,13 +5,6 @@ type CsvqlParams struct {
 	DataSourceName string
 	Delimiter      string
 	Query          string
-}
-
-type CsvqlImport interface {
-	Import() error
-	Close() error
-}
-
-type CsvqlExport interface {
-	Export() error
+	Export         string
+	Type           string
 }

@@ -4,4 +4,4 @@
 .tmp
 build/
 cp.out
-test.csv
+*.csv

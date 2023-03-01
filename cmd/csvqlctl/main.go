@@ -1,7 +1,7 @@
 package csvqlctl
 
 import (
-	csvql2 "adrianolaselva.github.io/csvql/internal/csvql"
+	"adrianolaselva.github.io/csvql/internal/csvql"
 	"github.com/spf13/cobra"
 )
 
@@ -14,6 +14,10 @@ const (
 	queryShortParam         = "q"
 	storageParam            = "storage"
 	storageShortParam       = "s"
+	exportParam             = "export"
+	exportShortParam        = "e"
+	typeParam               = "type"
+	typeShortParam          = "t"
 )
 
 type CsvQlCtl interface {
@@ -23,7 +27,7 @@ type CsvQlCtl interface {
 
 type csvQlCtl struct {
 	rootCmd *cobra.Command
-	params  csvql2.CsvqlParams
+	params  csvql.CsvqlParams
 }
 
 func New() CsvQlCtl {
@@ -53,6 +57,14 @@ func (c *csvQlCtl) Command() (*cobra.Command, error) {
 
 	command.
 		PersistentFlags().
+		StringVarP(&c.params.Export, exportParam, exportShortParam, "", "export path")
+
+	command.
+		PersistentFlags().
+		StringVarP(&c.params.Type, typeParam, typeShortParam, "", "format type [`jsonl`,`csv`]")
+
+	command.
+		PersistentFlags().
 		StringVarP(&c.params.DataSourceName, storageParam, storageShortParam, "", "sqlite file")
 
 	if err := command.MarkPersistentFlagRequired(fileParam); err != nil {
@@ -63,5 +75,5 @@ func (c *csvQlCtl) Command() (*cobra.Command, error) {
 }
 
 func (c *csvQlCtl) runE(_ *cobra.Command, _ []string) error {
-	return csvql2.New(c.params).Run()
+	return csvql.New(c.params).Run()
 }

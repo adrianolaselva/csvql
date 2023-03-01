@@ -1,6 +1,8 @@
 package csvql
 
 import (
+	"adrianolaselva.github.io/csvql/pkg/exportdata/jsonl"
+	csvimport "adrianolaselva.github.io/csvql/pkg/importdata/csv"
 	"bytes"
 	"database/sql"
 	"encoding/csv"
@@ -74,6 +76,11 @@ func (c *csvql) Run() error {
 		return err
 	}
 
+	err := csvimport.NewCsvImport(c.params.FileInput, rune(c.params.Delimiter[0]), c.db, c.bar).Import()
+	if err != nil {
+		return err
+	}
+
 	if err := c.loadDataFromFile(); err != nil {
 		return err
 	}
@@ -82,9 +89,13 @@ func (c *csvql) Run() error {
 }
 
 func (c *csvql) execute() error {
-	if c.params.Query != "" {
+	if c.params.Query != "" && c.params.Export == "" {
 		fmt.Printf("\n")
 		return c.executeQuery(c.params.Query)
+	}
+
+	if c.params.Query != "" && c.params.Export != "" {
+		return c.executeQueryAndExport(c.params.Query)
 	}
 
 	if err := c.initializePrompt(); err != nil {
@@ -140,6 +151,20 @@ func (c *csvql) initializePrompt() error {
 	}
 
 	return nil
+}
+
+func (c *csvql) executeQueryAndExport(line string) error {
+	c.bar.Reset()
+	c.bar.ChangeMax(c.lines)
+	defer c.bar.Finish()
+
+	rows, err := c.db.Query(line)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	return jsonl.NewJsonlExport(rows, c.params.Export, c.bar).Export()
 }
 
 func (c *csvql) executeQuery(line string) error {

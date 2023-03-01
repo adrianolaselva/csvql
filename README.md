@@ -108,6 +108,18 @@ origin_id    description                    metric_value   metric_date
 ```
 > Example of SQL execution after loading the `.csv` file and executing the query passed by parameter.
 
+**Example: Import, run query and export result inline**
+
+```shell
+wget https://www.stats.govt.nz/assets/Uploads/Annual-enterprise-survey/Annual-enterprise-survey-2021-financial-year-provisional/Download-data/annual-enterprise-survey-2021-financial-year-provisional-csv.csv
+```
+> Download example csv file
+
+```shell
+./csvql run -f ./annual-enterprise-survey-2021-financial-year-provisional-csv.csv -d "," -q "select Year, Variable_code, Units, Variable_code, Variable_category, Value from rows;" -e result.jsonl
+```
+> Load, run and export data
+
 ## References
 
 - [sqlite database](https://www.tutorialspoint.com/sqlite/index.htm)
