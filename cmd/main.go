@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"adrianolaselva.github.io/csvql/cmd/csvqlctl"
+	"fmt"
 	"github.com/spf13/cobra"
 	"syscall"
 )
@@ -49,7 +50,7 @@ func (c *cliBase) Execute() error {
 	c.rootCmd.AddCommand(csvQlCtl)
 
 	if err := c.rootCmd.Execute(); err != nil {
-		return err
+		return fmt.Errorf("failed to execute command %s", err)
 	}
 
 	return nil

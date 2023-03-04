@@ -2,10 +2,11 @@ package csvql
 
 import (
 	"adrianolaselva.github.io/csvql/pkg/exportdata/jsonl"
-	csvimport "adrianolaselva.github.io/csvql/pkg/importdata/csv"
-	"bytes"
+	"adrianolaselva.github.io/csvql/pkg/filehandler"
+	csvHandler "adrianolaselva.github.io/csvql/pkg/filehandler/csv"
+	"adrianolaselva.github.io/csvql/pkg/storage"
+	"adrianolaselva.github.io/csvql/pkg/storage/sqlite"
 	"database/sql"
-	"encoding/csv"
 	"fmt"
 	"github.com/chzyer/readline"
 	"github.com/fatih/color"
@@ -18,28 +19,29 @@ import (
 )
 
 const (
-	cliPrompt              = "csvql> "
-	cliInterruptPrompt     = "^C"
-	cliEOFPrompt           = "exit"
-	dataSourceNameDefault  = ":memory:"
-	sqlCreateTableTemplate = "CREATE TABLE rows (%s\n);"
-	sqlInsertTemplate      = "INSERT INTO rows (%s) VALUES (%s);"
+	cliPrompt          = "csvql> "
+	cliInterruptPrompt = "^C"
+	cliEOFPrompt       = "exit"
 )
 
 type Csvql interface {
 	Run() error
+	Close() error
 }
 
 type csvql struct {
-	db      *sql.DB
-	file    *os.File
-	bar     *progressbar.ProgressBar
-	params  CsvqlParams
-	columns []string
-	lines   int
+	storage     storage.Storage
+	bar         *progressbar.ProgressBar
+	params      CsvqlParams
+	fileHandler filehandler.FileHandler
 }
 
-func New(params CsvqlParams) Csvql {
+func New(params CsvqlParams) (Csvql, error) {
+	sqLiteStorage, err := sqlite.NewSqLiteStorage(params.DataSourceName)
+	if err != nil {
+		return nil, err
+	}
+
 	bar := progressbar.NewOptions(0,
 		progressbar.OptionSetWriter(os.Stdout),
 		progressbar.OptionEnableColorCodes(true),
@@ -54,43 +56,24 @@ func New(params CsvqlParams) Csvql {
 			BarEnd:        "]",
 		}))
 
-	if params.DataSourceName == "" {
-		params.DataSourceName = dataSourceNameDefault
-	}
+	impData := csvHandler.NewCsvHandler(params.FileInput, rune(params.Delimiter[0]), bar, sqLiteStorage)
 
-	return &csvql{params: params, bar: bar}
+	return &csvql{params: params, bar: bar, fileHandler: impData, storage: sqLiteStorage}, nil
 }
 
 func (c *csvql) Run() error {
-	defer c.close()
+	defer c.bar.Clear()
 
-	if err := c.loadTotalRows(); err != nil {
-		return err
+	if err := c.fileHandler.Import(); err != nil {
+		return fmt.Errorf("failed to import data %s", err)
 	}
-
-	if err := c.openFile(); err != nil {
-		return err
-	}
-
-	if err := c.openConnection(); err != nil {
-		return err
-	}
-
-	err := csvimport.NewCsvImport(c.params.FileInput, rune(c.params.Delimiter[0]), c.db, c.bar).Import()
-	if err != nil {
-		return err
-	}
-
-	if err := c.loadDataFromFile(); err != nil {
-		return err
-	}
+	defer c.fileHandler.Close()
 
 	return c.execute()
 }
 
 func (c *csvql) execute() error {
 	if c.params.Query != "" && c.params.Export == "" {
-		fmt.Printf("\n")
 		return c.executeQuery(c.params.Query)
 	}
 
@@ -105,14 +88,12 @@ func (c *csvql) execute() error {
 	return nil
 }
 
-func (c *csvql) close() {
-	if err := c.file.Close(); err != nil {
-		fmt.Fprintf(os.Stderr, "%s\n", err.Error())
-	}
+func (c *csvql) Close() error {
+	defer func(fileHandler filehandler.FileHandler) {
+		_ = fileHandler.Close()
+	}(c.fileHandler)
 
-	if err := c.db.Close(); err != nil {
-		fmt.Fprintf(os.Stderr, "%s\n", err.Error())
-	}
+	return nil
 }
 
 func (c *csvql) initializePrompt() error {
@@ -128,6 +109,7 @@ func (c *csvql) initializePrompt() error {
 		return err
 	}
 	defer l.Close()
+
 	l.CaptureExitSignal()
 
 	for {
@@ -155,10 +137,10 @@ func (c *csvql) initializePrompt() error {
 
 func (c *csvql) executeQueryAndExport(line string) error {
 	c.bar.Reset()
-	c.bar.ChangeMax(c.lines)
+	c.bar.ChangeMax(c.fileHandler.Lines())
 	defer c.bar.Finish()
 
-	rows, err := c.db.Query(line)
+	rows, err := c.storage.Query(line)
 	if err != nil {
 		return err
 	}
@@ -168,7 +150,7 @@ func (c *csvql) executeQueryAndExport(line string) error {
 }
 
 func (c *csvql) executeQuery(line string) error {
-	rows, err := c.db.Query(line)
+	rows, err := c.storage.Query(line)
 	if err != nil {
 		return err
 	}
@@ -207,124 +189,8 @@ func (c *csvql) printResult(rows *sql.Rows) error {
 		tbl.AddRow(values...)
 	}
 
+	_ = c.bar.Clear()
 	tbl.Print()
-
-	return nil
-}
-
-func (c *csvql) openConnection() error {
-	db, err := sql.Open("sqlite3", c.params.DataSourceName)
-	if err != nil {
-		return err
-	}
-
-	c.db = db
-
-	return nil
-}
-
-func (c *csvql) openFile() error {
-	f, err := os.Open(c.params.FileInput)
-	if err != nil {
-		return err
-	}
-
-	c.file = f
-
-	return nil
-}
-
-func (c *csvql) loadTotalRows() error {
-	r, err := os.Open(c.params.FileInput)
-	if err != nil {
-		return err
-	}
-	defer r.Close()
-
-	buf := make([]byte, 32*1024)
-	c.lines = 0
-	lineSep := []byte{'\n'}
-
-	for {
-		r, err := r.Read(buf)
-		c.lines += bytes.Count(buf[:r], lineSep)
-
-		switch {
-		case err == io.EOF:
-			return nil
-
-		case err != nil:
-			return err
-		}
-	}
-}
-
-func (c *csvql) loadDataFromFile() error {
-	c.bar.ChangeMax(c.lines)
-	defer c.bar.Finish()
-
-	r := csv.NewReader(c.file)
-	r.Comma = rune(c.params.Delimiter[0])
-
-	headers, err := r.Read()
-	if err != nil {
-		return err
-	}
-
-	c.columns = headers
-	if err := c.buildTable(); err != nil {
-		return err
-	}
-
-	for {
-		records, err := r.Read()
-		if err == io.EOF {
-			break
-		}
-
-		var values []any
-		for _, r := range records {
-			values = append(values, r)
-		}
-
-		if err := c.buildInsert(values); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// build table creation statement
-func (c *csvql) buildTable() error {
-	defer c.bar.Add(1)
-
-	var tableAttrsRaw strings.Builder
-	for ln, v := range c.columns {
-		tableAttrsRaw.WriteString(fmt.Sprintf("\n\t%s text", v))
-		if len(c.columns)-1 > ln {
-			tableAttrsRaw.WriteString(",")
-		}
-	}
-
-	if _, err := c.db.Exec(fmt.Sprintf(sqlCreateTableTemplate, tableAttrsRaw.String())); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// build insert create statement
-func (c *csvql) buildInsert(values []any) error {
-	defer c.bar.Add(1)
-
-	columnsRaw := strings.Join(c.columns, ", ")
-	paramsRaw := strings.Repeat("?, ", len(c.columns))
-	insertRaw := fmt.Sprintf(sqlInsertTemplate, columnsRaw, paramsRaw[:len(paramsRaw)-2])
-
-	if _, err := c.db.Exec(insertRaw, values...); err != nil {
-		return err
-	}
 
 	return nil
 }
