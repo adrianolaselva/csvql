@@ -1,12 +1,13 @@
 package csvql
 
 import (
-	"adrianolaselva.github.io/csvql/pkg/exportdata/jsonl"
+	"adrianolaselva.github.io/csvql/internal/exportdata"
 	"adrianolaselva.github.io/csvql/pkg/filehandler"
 	csvHandler "adrianolaselva.github.io/csvql/pkg/filehandler/csv"
 	"adrianolaselva.github.io/csvql/pkg/storage"
 	"adrianolaselva.github.io/csvql/pkg/storage/sqlite"
 	"database/sql"
+	"errors"
 	"fmt"
 	"github.com/chzyer/readline"
 	"github.com/fatih/color"
@@ -39,7 +40,7 @@ type csvql struct {
 func New(params CsvqlParams) (Csvql, error) {
 	sqLiteStorage, err := sqlite.NewSqLiteStorage(params.DataSourceName)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to initialize storage: %w", err)
 	}
 
 	bar := progressbar.NewOptions(0,
@@ -56,33 +57,38 @@ func New(params CsvqlParams) (Csvql, error) {
 			BarEnd:        "]",
 		}))
 
-	impData := csvHandler.NewCsvHandler(params.FileInput, rune(params.Delimiter[0]), bar, sqLiteStorage)
+	impData := csvHandler.NewCsvHandler(params.FileInput, rune(params.Delimiter[0]), bar, sqLiteStorage, params.Lines)
 
 	return &csvql{params: params, bar: bar, fileHandler: impData, storage: sqLiteStorage}, nil
 }
 
+// Run import file content and run command
 func (c *csvql) Run() error {
-	defer c.bar.Clear()
+	defer func(bar *progressbar.ProgressBar) {
+		_ = bar.Clear()
+	}(c.bar)
 
 	if err := c.fileHandler.Import(); err != nil {
-		return fmt.Errorf("failed to import data %s", err)
+		return fmt.Errorf("failed to import data %w", err)
 	}
-	defer c.fileHandler.Close()
+	defer func(fileHandler filehandler.FileHandler) {
+		_ = fileHandler.Close()
+	}(c.fileHandler)
 
 	return c.execute()
 }
 
+// execute execution after data import
 func (c *csvql) execute() error {
-	if c.params.Query != "" && c.params.Export == "" {
+	switch {
+	case c.params.Query != "" && c.params.Export == "":
 		return c.executeQuery(c.params.Query)
-	}
-
-	if c.params.Query != "" && c.params.Export != "" {
+	case c.params.Query != "" && c.params.Export != "":
 		return c.executeQueryAndExport(c.params.Query)
-	}
-
-	if err := c.initializePrompt(); err != nil {
-		return err
+	default:
+		if err := c.initializePrompt(); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -106,15 +112,17 @@ func (c *csvql) initializePrompt() error {
 		}),
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to initialize cli: %w", err)
 	}
-	defer l.Close()
+	defer func(l *readline.Instance) {
+		_ = l.Close()
+	}(l)
 
 	l.CaptureExitSignal()
 
 	for {
 		line, err := l.Readline()
-		if err == readline.ErrInterrupt {
+		if errors.Is(err, readline.ErrInterrupt) {
 			if len(line) == 0 {
 				break
 			}
@@ -122,7 +130,7 @@ func (c *csvql) initializePrompt() error {
 			continue
 		}
 
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 
@@ -135,26 +143,46 @@ func (c *csvql) initializePrompt() error {
 	return nil
 }
 
+// executeQueryAndExport execute query and export
 func (c *csvql) executeQueryAndExport(line string) error {
 	c.bar.Reset()
 	c.bar.ChangeMax(c.fileHandler.Lines())
-	defer c.bar.Finish()
+	defer func(bar *progressbar.ProgressBar) {
+		_ = bar.Finish()
+	}(c.bar)
 
 	rows, err := c.storage.Query(line)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to execute query: %w", err)
 	}
-	defer rows.Close()
+	defer func(rows *sql.Rows) {
+		_ = rows.Close()
+	}(rows)
 
-	return jsonl.NewJsonlExport(rows, c.params.Export, c.bar).Export()
+	export, err := exportdata.NewExport(c.params.Type, rows, c.params.Export, c.bar)
+	if err != nil {
+		return fmt.Errorf("failed to export: %w", err)
+	}
+
+	if err := export.Export(); err != nil {
+		return fmt.Errorf("failed to export data: %w", err)
+	}
+
+	c.bar.Clear()
+
+	fmt.Printf("[%s] file successfully exported\n", c.params.Export)
+
+	return nil
 }
 
 func (c *csvql) executeQuery(line string) error {
 	rows, err := c.storage.Query(line)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to execute query: %w", err)
 	}
-	defer rows.Close()
+	defer func(rows *sql.Rows) {
+		_ = rows.Close()
+	}(rows)
 
 	return c.printResult(rows)
 }
@@ -162,7 +190,7 @@ func (c *csvql) executeQuery(line string) error {
 func (c *csvql) printResult(rows *sql.Rows) error {
 	columns, err := rows.Columns()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to load columns: %w", err)
 	}
 
 	cols := make([]interface{}, 0)
@@ -183,7 +211,7 @@ func (c *csvql) printResult(rows *sql.Rows) error {
 		}
 
 		if err := rows.Scan(pointers...); err != nil {
-			return err
+			return fmt.Errorf("failed to read row: %w", err)
 		}
 
 		tbl.AddRow(values...)

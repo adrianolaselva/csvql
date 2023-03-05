@@ -6,23 +6,30 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"github.com/schollz/progressbar/v3"
 	"io"
 	"os"
 )
 
+const (
+	bufferMaxLength = 32 * 1024
+)
+
 type csvHandler struct {
-	bar       *progressbar.ProgressBar
-	storage   storage.Storage
-	file      *os.File
-	fileInput string
-	lines     int
-	delimiter rune
+	bar         *progressbar.ProgressBar
+	storage     storage.Storage
+	file        *os.File
+	fileInput   string
+	totalLines  int
+	limitLines  int
+	currentLine int
+	delimiter   rune
 }
 
-func NewCsvHandler(fileInput string, delimiter rune, bar *progressbar.ProgressBar, storage storage.Storage) filehandler.FileHandler {
-	return &csvHandler{fileInput: fileInput, delimiter: delimiter, storage: storage, bar: bar}
+func NewCsvHandler(fileInput string, delimiter rune, bar *progressbar.ProgressBar, storage storage.Storage, limitLines int) filehandler.FileHandler {
+	return &csvHandler{fileInput: fileInput, delimiter: delimiter, storage: storage, bar: bar, limitLines: limitLines}
 }
 
 // Import import data
@@ -35,6 +42,10 @@ func (c *csvHandler) Import() error {
 		return err
 	}
 
+	if c.limitLines > 0 && c.totalLines > c.limitLines {
+		c.totalLines = c.limitLines
+	}
+
 	if err := c.loadDataFromFile(); err != nil {
 		return err
 	}
@@ -44,12 +55,17 @@ func (c *csvHandler) Import() error {
 
 // Query execute statements
 func (c *csvHandler) Query(cmd string) (*sql.Rows, error) {
-	return c.storage.Query(cmd)
+	rows, err := c.storage.Query(cmd)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute query: %w", err)
+	}
+
+	return rows, nil
 }
 
 // Lines return total lines
 func (c *csvHandler) Lines() int {
-	return c.lines
+	return c.totalLines
 }
 
 // Close execute in defer
@@ -65,48 +81,82 @@ func (c *csvHandler) Close() error {
 	return nil
 }
 
+// loadDataFromFile load data from file
 func (c *csvHandler) loadDataFromFile() error {
-	c.bar.ChangeMax(c.lines)
+	c.bar.ChangeMax(c.totalLines)
 
 	r := csv.NewReader(c.file)
 	r.Comma = c.delimiter
 
-	headers, err := r.Read()
-	if err != nil {
-		return fmt.Errorf("failed to load headers: %s", err)
+	if err := c.readHeader(r); err != nil {
+		return fmt.Errorf("failed to load headers and build structure: %w", err)
 	}
 
-	if err := c.storage.SetColumns(headers).BuildStructure(); err != nil {
-		return fmt.Errorf("failed to load headers and build structure: %s", err)
-	}
-
-	line := 1
+	c.currentLine = 0
 	for {
-		line++
-		records, err := r.Read()
-		if err == io.EOF {
+		err := c.readline(r)
+		if errors.Is(err, io.EOF) {
 			break
 		}
 
-		var values []any
-		for _, r := range records {
-			values = append(values, r)
-		}
-
-		_ = c.bar.Add(1)
-		if err := c.storage.InsertRow(values); err != nil {
-			return fmt.Errorf("failed to process row: %s", err)
+		if err != nil {
+			return err
 		}
 	}
 
 	return nil
 }
 
+// readHeader read header
+func (c *csvHandler) readHeader(r *csv.Reader) error {
+	headers, err := r.Read()
+	if err != nil {
+		return fmt.Errorf("failed to load headers: %w", err)
+	}
+
+	if err := c.storage.SetColumns(headers).BuildStructure(); err != nil {
+		return fmt.Errorf("failed to load headers and build structure: %w", err)
+	}
+
+	return nil
+}
+
+// readline read line
+func (c *csvHandler) readline(r *csv.Reader) error {
+	records, err := r.Read()
+	if err != nil {
+		return fmt.Errorf("failed to read line: %w", err)
+	}
+
+	if c.totalLines == c.currentLine {
+		return io.EOF
+	}
+
+	_ = c.bar.Add(1)
+	c.currentLine++
+
+	if err := c.storage.InsertRow(c.convertToAnyArray(records)); err != nil {
+		return fmt.Errorf("failed to process row number %d: %w", c.currentLine, err)
+	}
+
+	return nil
+}
+
+// convertToAnyArray convert string array to any array
+func (c *csvHandler) convertToAnyArray(records []string) []any {
+	values := make([]any, 0, len(records))
+	for _, r := range records {
+		values = append(values, r)
+	}
+
+	return values
+}
+
 // openFile open file
 func (c *csvHandler) openFile() error {
 	f, err := os.Open(c.fileInput)
 	if err != nil {
-		return fmt.Errorf("failed to open file: %s", err)
+		return fmt.Errorf("failed to open file: %w", err)
 	}
 
 	c.file = f
@@ -118,24 +168,24 @@ func (c *csvHandler) openFile() error {
 func (c *csvHandler) loadTotalRows() error {
 	r, err := os.Open(c.fileInput)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to open file %s: %w", c.fileInput, err)
 	}
 	defer r.Close()
 
-	buf := make([]byte, 32*1024)
-	c.lines = 0
+	buf := make([]byte, bufferMaxLength)
+	c.totalLines = 0
 	lineSep := []byte{'\n'}
 
 	for {
 		r, err := r.Read(buf)
-		c.lines += bytes.Count(buf[:r], lineSep)
+		c.totalLines += bytes.Count(buf[:r], lineSep)
 
 		switch {
 		case err == io.EOF:
 			return nil
 
 		case err != nil:
-			return fmt.Errorf("failed to totalize rows: %s", err)
+			return fmt.Errorf("failed to totalize rows: %w", err)
 		}
 	}
 }

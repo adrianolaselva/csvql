@@ -6,3 +6,4 @@ build/
 cp.out
 *.csv
 *.jsonl
+*.db

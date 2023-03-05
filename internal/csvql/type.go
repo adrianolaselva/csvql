@@ -7,4 +7,5 @@ type CsvqlParams struct {
 	Query          string
 	Export         string
 	Type           string
+	Lines          int
 }

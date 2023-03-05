@@ -27,7 +27,7 @@ func NewSqLiteStorage(datasource string) (storage.Storage, error) {
 
 	db, err := sql.Open("sqlite3", datasource)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to open connection with sqlite3: %w", err)
 	}
 
 	return &sqLiteStorage{db: db, tableName: defaultTableName}, nil
@@ -55,7 +55,7 @@ func (s *sqLiteStorage) BuildStructure() error {
 
 	query := fmt.Sprintf(sqlCreateTableTemplate, tableAttrsRaw.String())
 	if _, err := s.db.Exec(query); err != nil {
-		return fmt.Errorf("failed to create structure: %s (sql: %s)", err, query)
+		return fmt.Errorf("failed to create structure: %w (sql: %s)", err, query)
 	}
 
 	return nil
@@ -68,7 +68,7 @@ func (s *sqLiteStorage) InsertRow(values []any) error {
 	query := fmt.Sprintf(sqlInsertTemplate, s.tableName, columnsRaw, paramsRaw[:len(paramsRaw)-2])
 
 	if _, err := s.db.Exec(query, values...); err != nil {
-		return fmt.Errorf("failed to execute insert: %s (sql: %s)", err, query)
+		return fmt.Errorf("failed to execute insert: %w (sql: %s)", err, query)
 	}
 
 	return nil
@@ -76,10 +76,20 @@ func (s *sqLiteStorage) InsertRow(values []any) error {
 
 // Query execute statements
 func (s *sqLiteStorage) Query(cmd string) (*sql.Rows, error) {
-	return s.db.Query(cmd)
+	rows, err := s.db.Query(cmd)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute query: %w", err)
+	}
+
+	return rows, nil
 }
 
 // Close execute in defer
 func (s *sqLiteStorage) Close() error {
-	return s.db.Close()
+	err := s.db.Close()
+	if err != nil {
+		return fmt.Errorf("failed to close sqlite3 connection: %w", err)
+	}
+
+	return nil
 }

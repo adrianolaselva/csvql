@@ -44,13 +44,13 @@ func New() CliBase {
 func (c *cliBase) Execute() error {
 	csvQlCtl, err := csvqlctl.New().Command()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to execute command: %w", err)
 	}
 
 	c.rootCmd.AddCommand(csvQlCtl)
 
 	if err := c.rootCmd.Execute(); err != nil {
-		return fmt.Errorf("failed to execute command %s", err)
+		return fmt.Errorf("failed to execute command %w", err)
 	}
 
 	return nil

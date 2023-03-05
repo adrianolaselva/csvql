@@ -2,6 +2,7 @@ package csvqlctl
 
 import (
 	"adrianolaselva.github.io/csvql/internal/csvql"
+	"fmt"
 	"github.com/spf13/cobra"
 )
 
@@ -18,6 +19,8 @@ const (
 	exportShortParam        = "e"
 	typeParam               = "type"
 	typeShortParam          = "t"
+	linesParam              = "lines"
+	linesShortParam         = "l"
 )
 
 type CsvQlCtl interface {
@@ -26,8 +29,7 @@ type CsvQlCtl interface {
 }
 
 type csvQlCtl struct {
-	rootCmd *cobra.Command
-	params  csvql.CsvqlParams
+	params csvql.CsvqlParams
 }
 
 func New() CsvQlCtl {
@@ -67,8 +69,16 @@ func (c *csvQlCtl) Command() (*cobra.Command, error) {
 		PersistentFlags().
 		StringVarP(&c.params.DataSourceName, storageParam, storageShortParam, "", "sqlite file")
 
+	command.
+		PersistentFlags().
+		IntVarP(&c.params.Lines, linesParam, linesShortParam, 0, "number of lines to be read")
+
 	if err := command.MarkPersistentFlagRequired(fileParam); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to validate flag %s: %w", fileParam, err)
+	}
+
+	if c.params.Export != "" && c.params.Type == "" {
+		return nil, fmt.Errorf("failed to validate flag")
 	}
 
 	return command, nil
@@ -76,11 +86,18 @@ func (c *csvQlCtl) Command() (*cobra.Command, error) {
 
 func (c *csvQlCtl) runE(cmd *cobra.Command, _ []string) error {
 	cmd.SilenceUsage = true
-	csvql, err := csvql.New(c.params)
+	csvQl, err := csvql.New(c.params)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to initialize csvql: %w", err)
 	}
-	defer csvql.Close()
+	defer func(csvQl csvql.Csvql) {
+		_ = csvQl.Close()
+	}(csvQl)
 
-	return csvql.Run()
+	err = csvQl.Run()
+	if err != nil {
+		return fmt.Errorf("failed to run csvql: %w", err)
+	}
+
+	return nil
 }

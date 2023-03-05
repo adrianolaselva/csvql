@@ -1,0 +1,40 @@
+run:
+  timeout: 30m
+  issues-exit-code: 1
+linters:
+  enable:
+    - contextcheck
+    - cyclop
+    - errorlint
+    - exhaustive
+    - exportloopref
+    - gofmt
+    - gomnd
+    - gosec
+    - makezero
+    - misspell
+    - nilerr
+    - noctx
+#    - revive
+    - tagliatelle
+    - tenv
+    - unconvert
+    - unparam
+    - wrapcheck
+    - dupword
+    - gocritic
+    - ineffassign
+    - prealloc
+    - whitespace
+  disable:
+    - structcheck # https://github.com/golangci/golangci-lint/issues/2649
+linters-settings:
+  tagliatelle:
+    case:
+      use-field-name: true
+      rules:
+        json: snake
+  whitespace:
+    multi-func: true
+  goimports:
+    local-prefixes: adrianolaselva.github.io/csvql
