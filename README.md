@@ -4,8 +4,9 @@
 
 
 ![github actions](https://github.com/adrianolaselva/csvql/actions/workflows/build.yml/badge.svg)
+[![Build Status](https://scrutinizer-ci.com/g/adrianolaselva/csvql/badges/build.png?b=main)](https://scrutinizer-ci.com/g/adrianolaselva/csvql/build-status/main)
 [![Scrutinizer Code Quality](https://scrutinizer-ci.com/g/adrianolaselva/csvql/badges/quality-score.png?b=main)](https://scrutinizer-ci.com/g/adrianolaselva/csvql/?branch=main)
-[![Scrutinizer Code Quality](https://scrutinizer-ci.com/g/adrianolaselva/csvql/badges/quality-score.png?b=master)](https://scrutinizer-ci.com/g/adrianolaselva/csvql/?branch=master)
+[![Code Coverage](https://scrutinizer-ci.com/g/adrianolaselva/csvql/badges/coverage.png?b=main)](https://scrutinizer-ci.com/g/adrianolaselva/csvql/?branch=main)
 [![GoDoc](https://godoc.org/github.com/adrianolaselva/csvql?status.svg)](https://pkg.go.dev/github.com/adrianolaselva/csvql)
 ![GitHub issues](https://img.shields.io/github/issues/adrianolaselva/csvql)
 ![license](http://img.shields.io/badge/license-Apache%20v2-blue.svg)
@@ -22,10 +23,11 @@ require the use of tools such as excel.
 
 - Import `.csv` file for manipulation.
 - Using sqlite-based SQL statements.
+- Export `queryes` in `.csv` e `.jsonl`.
 
 **future features:**
 
-- Export `queryes` in `.csv`, `.json`, `.jsonl` or `sqlite3`.
+- Export `queryes` in `.json` or `sqlite3`.
 
 ## Installation
 
@@ -46,6 +48,8 @@ curl -s "https://raw.githubusercontent.com/adrianolaselva/csvql/v1.0.0/bin/insta
 **Note: Soon you can also choose to download the binary install and use it**
 
 ## Uninstallation
+
+Run the command below to download and uninstall.
 
 ```sh
 curl -s "https://raw.githubusercontent.com/adrianolaselva/csvql/main/bin/install" | bash
@@ -116,9 +120,20 @@ wget https://www.stats.govt.nz/assets/Uploads/Annual-enterprise-survey/Annual-en
 > Download example csv file
 
 ```shell
-./csvql run -f ./annual-enterprise-survey-2021-financial-year-provisional-csv.csv -d "," -q "select Year, Variable_code, Units, Variable_code, Variable_category, Value from rows;" -e result.jsonl
+./csvql run -f ./annual-enterprise-survey-2021-financial-year-provisional-csv.csv \
+  -d "," \
+  -q "select Year year, Industry_aggregation_NZSIOC industry_aggs, Industry_code_NZSIOC industry_code, Variable_code code, Variable_category category, Variable_name name, Units unit, Value amount from rows;" \
+  -e result.jsonl -t jsonl
 ```
-> Load, run and export data
+> Load, run and export data in jsonl
+
+```shell
+./csvql run -f ./annual-enterprise-survey-2021-financial-year-provisional-csv.csv \
+  -d "," \
+  -q "select Year year, Industry_aggregation_NZSIOC industry_aggs, Industry_code_NZSIOC industry_code, Variable_code code, Variable_category category, Variable_name name, Units unit, Value amount from rows limit 20;" \
+  -e result.csv -t csv
+```
+> Load, run and export data in csv
 
 ## References
 
