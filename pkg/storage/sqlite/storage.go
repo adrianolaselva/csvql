@@ -4,6 +4,7 @@ import (
 	"adrianolaselva.github.io/csvql/pkg/storage"
 	"database/sql"
 	"fmt"
+	_ "github.com/mattn/go-sqlite3"
 	"strings"
 )
 
@@ -33,11 +34,13 @@ func NewSqLiteStorage(datasource string) (storage.Storage, error) {
 	return &sqLiteStorage{db: db, tableName: defaultTableName}, nil
 }
 
+// SetTableName set table name
 func (s *sqLiteStorage) SetTableName(tableName string) storage.Storage {
 	s.tableName = tableName
 	return s
 }
 
+// SetColumns set columns
 func (s *sqLiteStorage) SetColumns(columns []string) storage.Storage {
 	s.columns = columns
 	return s

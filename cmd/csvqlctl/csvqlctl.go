@@ -29,7 +29,7 @@ type CsvQlCtl interface {
 }
 
 type csvQlCtl struct {
-	params csvql.CsvqlParams
+	params csvql.Params
 }
 
 func New() CsvQlCtl {

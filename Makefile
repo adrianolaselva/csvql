@@ -1,4 +1,5 @@
 PROJECT_NAME=csvql
+PROJECT_VENDOR=adrianolaselva
 VERSION=latest
 
 ifndef release
@@ -10,9 +11,9 @@ all:
 build:
 	go build -o $(PROJECT_NAME) -v ./
 test:
-	go test -count=1 -v ./...
-linter:
-	golangci-lint run --out-format checkstyle
+	go test -count=1 -short -coverprofile=./.tmp/cp.out ./...
+linter-out:
+	golangci-lint run --out-format checkstyle > .tmp/lint.out
 run:
 	go run run ./...
 tidy:
@@ -24,4 +25,4 @@ deps:
 build-linux:
 	GOOS=linux GOARCH=amd64 go build -o $(PROJECT_NAME) -v ./
 docker-build:
-	docker build --rm -f "Dockerfile" -t "adrianolaselva/$(PROJECT_NAME):$(release)" "." --build-arg VERSION=$(release)
+	docker build --rm -f "Dockerfile" -t "$(PROJECT_VENDOR)/$(PROJECT_NAME):$(release)" "." --build-arg VERSION=$(release)

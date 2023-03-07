@@ -10,15 +10,15 @@ import (
 )
 
 const (
-	CsvLineExportType  = "csv"
-	JsonLineExportType = "jsonl"
+	CSVLineExportType  = "csv"
+	JSONLineExportType = "jsonl"
 )
 
 func NewExport(exportType string, rows *sql.Rows, exportPath string, bar *progressbar.ProgressBar) (exportdata.Export, error) {
 	switch exportType {
-	case CsvLineExportType:
+	case CSVLineExportType:
 		return csv.NewCsvExport(rows, exportPath, bar), nil
-	case JsonLineExportType:
+	case JSONLineExportType:
 		return jsonl.NewJsonlExport(rows, exportPath, bar), nil
 	}
 

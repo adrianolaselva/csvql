@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"github.com/chzyer/readline"
 	"github.com/fatih/color"
-	_ "github.com/mattn/go-sqlite3"
 	"github.com/rodaine/table"
 	"github.com/schollz/progressbar/v3"
 	"io"
@@ -33,11 +32,11 @@ type Csvql interface {
 type csvql struct {
 	storage     storage.Storage
 	bar         *progressbar.ProgressBar
-	params      CsvqlParams
+	params      Params
 	fileHandler filehandler.FileHandler
 }
 
-func New(params CsvqlParams) (Csvql, error) {
+func New(params Params) (Csvql, error) {
 	sqLiteStorage, err := sqlite.NewSqLiteStorage(params.DataSourceName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize storage: %w", err)
@@ -168,7 +167,7 @@ func (c *csvql) executeQueryAndExport(line string) error {
 		return fmt.Errorf("failed to export data: %w", err)
 	}
 
-	c.bar.Clear()
+	_ = c.bar.Clear()
 
 	fmt.Printf("[%s] file successfully exported\n", c.params.Export)
 

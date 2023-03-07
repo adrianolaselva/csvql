@@ -1,5 +1,8 @@
 checks:
   go: true
+filter:
+  excluded_paths:
+    - "*_test.go"
 build:
   nodes:
     analysis:
@@ -18,3 +21,10 @@ build:
       environment:
         go:
           version: go1.8.3
+#    coverage:
+#      tests:
+#        override:
+#          - command: go test -coverprofile=cover.out
+#            coverage:
+#              file: 'cover.out'
+#              format: 'go-cc'
