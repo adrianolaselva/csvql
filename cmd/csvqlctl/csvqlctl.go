@@ -21,6 +21,8 @@ const (
 	typeShortParam          = "t"
 	linesParam              = "lines"
 	linesShortParam         = "l"
+	tableNameParam          = "collection"
+	tableNameShortParam     = "c"
 )
 
 type CsvQlCtl interface {
@@ -47,7 +49,7 @@ func (c *csvQlCtl) Command() (*cobra.Command, error) {
 
 	command.
 		PersistentFlags().
-		StringVarP(&c.params.FileInput, fileParam, fileShortParam, "", "origin file in csv")
+		StringArrayVarP(&c.params.FileInputs, fileParam, fileShortParam, []string{}, "origin file in csv")
 
 	command.
 		PersistentFlags().

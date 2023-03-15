@@ -11,6 +11,9 @@ import (
 	"github.com/schollz/progressbar/v3"
 	"io"
 	"os"
+	"path/filepath"
+	"strings"
+	"sync"
 )
 
 const (
@@ -18,27 +21,41 @@ const (
 )
 
 type csvHandler struct {
+	mx          sync.Mutex
 	bar         *progressbar.ProgressBar
 	storage     storage.Storage
-	file        *os.File
-	fileInput   string
+	files       []*os.File
+	fileInputs  []string
 	totalLines  int
 	limitLines  int
 	currentLine int
 	delimiter   rune
 }
 
-func NewCsvHandler(fileInput string, delimiter rune, bar *progressbar.ProgressBar, storage storage.Storage, limitLines int) filehandler.FileHandler {
-	return &csvHandler{fileInput: fileInput, delimiter: delimiter, storage: storage, bar: bar, limitLines: limitLines}
+func NewCsvHandler(fileInputs []string, delimiter rune, bar *progressbar.ProgressBar, storage storage.Storage, limitLines int) filehandler.FileHandler {
+	return &csvHandler{fileInputs: fileInputs, delimiter: delimiter, storage: storage, bar: bar, limitLines: limitLines}
 }
 
 // Import import data
 func (c *csvHandler) Import() error {
-	if err := c.openFile(); err != nil {
+	if err := c.openFiles(); err != nil {
 		return err
 	}
 
-	if err := c.loadTotalRows(); err != nil {
+	wg := new(sync.WaitGroup)
+	wg.Add(len(c.fileInputs))
+	errChannels := make(chan error, len(c.fileInputs))
+
+	for _, file := range c.fileInputs {
+		go func(wg *sync.WaitGroup, file string, errChan chan error) {
+			defer wg.Done()
+			err := c.loadTotalRows(file)
+			errChan <- err
+		}(wg, file, errChannels)
+	}
+
+	wg.Wait()
+	if err := <-errChannels; err != nil {
 		return err
 	}
 
@@ -46,7 +63,18 @@ func (c *csvHandler) Import() error {
 		c.totalLines = c.limitLines
 	}
 
-	if err := c.loadDataFromFile(); err != nil {
+	wg.Add(len(c.files))
+	errChannels = make(chan error, len(c.files))
+	for _, file := range c.files {
+		tableName := strings.ReplaceAll(strings.ToLower(filepath.Base(file.Name())), filepath.Ext(file.Name()), "")
+		go func(wg *sync.WaitGroup, file *os.File, tableName string, errChan chan error) {
+			defer wg.Done()
+			errChan <- c.loadDataFromFile(tableName, file)
+		}(wg, file, tableName, errChannels)
+	}
+
+	wg.Wait()
+	if err := <-errChannels; err != nil {
 		return err
 	}
 
@@ -74,27 +102,33 @@ func (c *csvHandler) Close() error {
 		_ = storage.Close()
 	}(c.storage)
 
-	defer func(file *os.File) {
-		_ = file.Close()
-	}(c.file)
+	defer func(files []*os.File) {
+		for _, file := range files {
+			_ = file.Close()
+		}
+	}(c.files)
 
 	return nil
 }
 
 // loadDataFromFile load data from file
-func (c *csvHandler) loadDataFromFile() error {
+func (c *csvHandler) loadDataFromFile(tableName string, file *os.File) error {
+	c.mx.Lock()
+	defer c.mx.Unlock()
+
 	c.bar.ChangeMax(c.totalLines)
 
-	r := csv.NewReader(c.file)
+	r := csv.NewReader(file)
 	r.Comma = c.delimiter
 
-	if err := c.readHeader(r); err != nil {
+	columns, err := c.readHeader(tableName, r)
+	if err != nil {
 		return fmt.Errorf("failed to load headers and build structure: %w", err)
 	}
 
 	c.currentLine = 0
 	for {
-		err := c.readline(r)
+		err := c.readline(tableName, columns, r)
 		if errors.Is(err, io.EOF) {
 			break
 		}
@@ -108,21 +142,21 @@ func (c *csvHandler) loadDataFromFile() error {
 }
 
 // readHeader read header
-func (c *csvHandler) readHeader(r *csv.Reader) error {
-	headers, err := r.Read()
+func (c *csvHandler) readHeader(tableName string, r *csv.Reader) ([]string, error) {
+	columns, err := r.Read()
 	if err != nil {
-		return fmt.Errorf("failed to load headers: %w", err)
+		return nil, fmt.Errorf("failed to load headers: %w", err)
 	}
 
-	if err := c.storage.SetColumns(headers).BuildStructure(); err != nil {
-		return fmt.Errorf("failed to load headers and build structure: %w", err)
+	if err := c.storage.BuildStructure(tableName, columns); err != nil {
+		return nil, fmt.Errorf("failed to load headers and build structure: %w", err)
 	}
 
-	return nil
+	return columns, nil
 }
 
 // readline read line
-func (c *csvHandler) readline(r *csv.Reader) error {
+func (c *csvHandler) readline(tableName string, columns []string, r *csv.Reader) error {
 	records, err := r.Read()
 	if err != nil {
 		return fmt.Errorf("failed to read line: %w", err)
@@ -135,7 +169,7 @@ func (c *csvHandler) readline(r *csv.Reader) error {
 	_ = c.bar.Add(1)
 	c.currentLine++
 
-	if err := c.storage.InsertRow(c.convertToAnyArray(records)); err != nil {
+	if err := c.storage.InsertRow(tableName, columns, c.convertToAnyArray(records)); err != nil {
 		return fmt.Errorf("failed to process row number %d: %w", c.currentLine, err)
 	}
 
@@ -153,24 +187,43 @@ func (c *csvHandler) convertToAnyArray(records []string) []any {
 }
 
 // openFile open file
-func (c *csvHandler) openFile() error {
-	f, err := os.Open(c.fileInput)
-	if err != nil {
-		return fmt.Errorf("failed to open file: %w", err)
+func (c *csvHandler) openFiles() error {
+	wg := new(sync.WaitGroup)
+	wg.Add(len(c.fileInputs))
+	errChannels := make(chan error, len(c.fileInputs))
+
+	for _, file := range c.fileInputs {
+		go func(wg *sync.WaitGroup, file string, errChan chan error) {
+			defer wg.Done()
+
+			f, err := os.Open(file)
+			if err != nil {
+				errChan <- fmt.Errorf("failed to open file: %w", err)
+				return
+			}
+
+			c.files = append(c.files, f)
+			errChan <- nil
+		}(wg, file, errChannels)
 	}
 
-	c.file = f
+	wg.Wait()
+	if err := <-errChannels; err != nil {
+		return fmt.Errorf("failed to open file: %w", err)
+	}
 
 	return nil
 }
 
 // loadTotalRows load total rows in file
-func (c *csvHandler) loadTotalRows() error {
-	r, err := os.Open(c.fileInput)
+func (c *csvHandler) loadTotalRows(file string) error {
+	r, err := os.Open(file)
 	if err != nil {
-		return fmt.Errorf("failed to open file %s: %w", c.fileInput, err)
+		return fmt.Errorf("failed to open file %s: %w", file, err)
 	}
-	defer r.Close()
+	defer func(r *os.File) {
+		_ = r.Close()
+	}(r)
 
 	buf := make([]byte, bufferMaxLength)
 	c.totalLines = 0

@@ -101,11 +101,11 @@ func TestShouldBuildStructureWithSuccess(t *testing.T) {
 		storage, err := sqlite.NewSqLiteStorage(":memory:")
 		assert.NoError(t, err)
 
-		err = storage.SetColumns(test.columns).BuildStructure()
+		err = storage.BuildStructure("rows", test.columns)
 		assert.NoError(t, err)
 
 		for _, row := range test.rows {
-			err = storage.InsertRow(row)
+			err = storage.InsertRow("rows", test.columns, row)
 			assert.NoError(t, err)
 		}
 

@@ -39,7 +39,7 @@ fi
 
 (sudo mkdir -p $SOURCE_INSTALL_DEST && sudo cp "$SOURCE_TMP_INSTALL/csvql" $SOURCE_INSTALL_DEST)
 
-sudo ln -s "$SOURCE_INSTALL_DEST/csvql" /usr/local/bin/csvql
+sudo ln -s "/usr/local/csvql-cli/csvql" /usr/local/bin/csvql
 
 source ~/.bash_profile
 
