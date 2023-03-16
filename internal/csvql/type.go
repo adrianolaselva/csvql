@@ -1,7 +1,7 @@
 package csvql
 
 type Params struct {
-	FileInput      string
+	FileInputs     []string
 	DataSourceName string
 	Delimiter      string
 	Query          string

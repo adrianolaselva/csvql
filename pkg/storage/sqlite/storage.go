@@ -9,16 +9,16 @@ import (
 )
 
 const (
-	sqlCreateTableTemplate = "CREATE TABLE rows (%s\n);"
-	sqlInsertTemplate      = "INSERT INTO %s (%s) VALUES (%s);"
-	defaultTableName       = "rows"
-	dataSourceNameDefault  = ":memory:"
+	sqlCreateTableTemplate        = "CREATE TABLE IF NOT EXISTS %s (%s\n);"
+	sqlInsertTemplate             = "INSERT INTO %s (%s) VALUES (%s);"
+	sqlInsertDefaultTableTemplate = "INSERT INTO `schemas` (`id`, `name`, `columns`, `total_columns`) VALUES ((select count(1)+1 FROM `schemas`),?,?,?);"
+	sqlShowTablesTemplate         = "select * from `schemas`;"
+	sqlDefaultTableTemplate       = "CREATE TABLE IF NOT EXISTS `schemas` (`id` INTEGER, `name` text, `columns` text, `total_columns` INTEGER);"
+	dataSourceNameDefault         = ":memory:"
 )
 
 type sqLiteStorage struct {
-	db        *sql.DB
-	tableName string
-	columns   []string
+	db *sql.DB
 }
 
 func NewSqLiteStorage(datasource string) (storage.Storage, error) {
@@ -31,44 +31,46 @@ func NewSqLiteStorage(datasource string) (storage.Storage, error) {
 		return nil, fmt.Errorf("failed to open connection with sqlite3: %w", err)
 	}
 
-	return &sqLiteStorage{db: db, tableName: defaultTableName}, nil
-}
-
-// SetTableName set table name
-func (s *sqLiteStorage) SetTableName(tableName string) storage.Storage {
-	s.tableName = tableName
-	return s
-}
-
-// SetColumns set columns
-func (s *sqLiteStorage) SetColumns(columns []string) storage.Storage {
-	s.columns = columns
-	return s
+	return &sqLiteStorage{db: db}, nil
 }
 
 // BuildStructure build table creation statement
-func (s *sqLiteStorage) BuildStructure() error {
+func (s *sqLiteStorage) BuildStructure(tableName string, columns []string) error {
 	var tableAttrsRaw strings.Builder
-	for i, v := range s.columns {
+
+	for i, v := range columns {
+		columns[i] = fmt.Sprintf("`%v`", v)
+	}
+
+	for i, v := range columns {
 		tableAttrsRaw.WriteString(fmt.Sprintf("\n\t%s text", v))
-		if len(s.columns)-1 > i {
+		if len(columns)-1 > i {
 			tableAttrsRaw.WriteString(",")
 		}
 	}
 
-	query := fmt.Sprintf(sqlCreateTableTemplate, tableAttrsRaw.String())
+	query := fmt.Sprintf(sqlCreateTableTemplate, tableName, tableAttrsRaw.String())
 	if _, err := s.db.Exec(query); err != nil {
 		return fmt.Errorf("failed to create structure: %w (sql: %s)", err, query)
+	}
+
+	if _, err := s.db.Exec(sqlDefaultTableTemplate); err != nil {
+		return fmt.Errorf("failed to create tables schemas structure: %w", err)
+	}
+
+	columnsRaw := fmt.Sprintf("[%v]", strings.Join(columns, ","))
+	if _, err := s.db.Exec(sqlInsertDefaultTableTemplate, []any{tableName, columnsRaw, len(columns)}...); err != nil {
+		return fmt.Errorf("failed to execute insert: %w", err)
 	}
 
 	return nil
 }
 
 // InsertRow build insert create statement
-func (s *sqLiteStorage) InsertRow(values []any) error {
-	columnsRaw := strings.Join(s.columns, ", ")
-	paramsRaw := strings.Repeat("?, ", len(s.columns))
-	query := fmt.Sprintf(sqlInsertTemplate, s.tableName, columnsRaw, paramsRaw[:len(paramsRaw)-2])
+func (s *sqLiteStorage) InsertRow(tableName string, columns []string, values []any) error {
+	columnsRaw := strings.Join(columns, ", ")
+	paramsRaw := strings.Repeat("?, ", len(columns))
+	query := fmt.Sprintf(sqlInsertTemplate, tableName, columnsRaw, paramsRaw[:len(paramsRaw)-2])
 
 	if _, err := s.db.Exec(query, values...); err != nil {
 		return fmt.Errorf("failed to execute insert: %w (sql: %s)", err, query)
@@ -80,6 +82,15 @@ func (s *sqLiteStorage) InsertRow(values []any) error {
 // Query execute statements
 func (s *sqLiteStorage) Query(cmd string) (*sql.Rows, error) {
 	rows, err := s.db.Query(cmd)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute query: %w", err)
+	}
+
+	return rows, nil
+}
+
+func (s *sqLiteStorage) ShowTables() (*sql.Rows, error) {
+	rows, err := s.db.Query(sqlShowTablesTemplate)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute query: %w", err)
 	}

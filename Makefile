@@ -9,7 +9,7 @@ endif
 all:
 	git rev-parse HEAD
 build:
-	go build -o $(PROJECT_NAME) -v ./
+	go build -a -ldflags="-s -w" -o $(PROJECT_NAME) -v ./
 test:
 	go test -count=1 -short -coverprofile=./.tmp/cp.out ./...
 linter-out:

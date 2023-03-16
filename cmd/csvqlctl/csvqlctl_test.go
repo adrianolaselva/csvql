@@ -26,9 +26,9 @@ func TestShouldExecuteWithSuccess(t *testing.T) {
 		queries   []string
 	}{
 		{
-			args:     []string{"-f", "./../../.tmp/0001.csv", "-d", ";"},
+			args:     []string{"-f", "./../../.tmp/table_test.csv", "-d", ";"},
 			filePath: "./../../.tmp",
-			fileName: "0001.csv",
+			fileName: "table_test.csv",
 			data: strings.Join([]string{
 				"id;name;email",
 				"0001;teste_1;teste_1@gmail.com",

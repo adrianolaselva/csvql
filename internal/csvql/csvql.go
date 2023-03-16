@@ -56,7 +56,7 @@ func New(params Params) (Csvql, error) {
 			BarEnd:        "]",
 		}))
 
-	impData := csvHandler.NewCsvHandler(params.FileInput, rune(params.Delimiter[0]), bar, sqLiteStorage, params.Lines)
+	impData := csvHandler.NewCsvHandler(params.FileInputs, rune(params.Delimiter[0]), bar, sqLiteStorage, params.Lines)
 
 	return &csvql{params: params, bar: bar, fileHandler: impData, storage: sqLiteStorage}, nil
 }
@@ -73,6 +73,15 @@ func (c *csvql) Run() error {
 	defer func(fileHandler filehandler.FileHandler) {
 		_ = fileHandler.Close()
 	}(c.fileHandler)
+
+	rows, err := c.storage.ShowTables()
+	if err != nil {
+		return err
+	}
+
+	if err := c.printResult(rows); err != nil {
+		return fmt.Errorf("failed to list tables: %w", err)
+	}
 
 	return c.execute()
 }
@@ -113,6 +122,7 @@ func (c *csvql) initializePrompt() error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize cli: %w", err)
 	}
+
 	defer func(l *readline.Instance) {
 		_ = l.Close()
 	}(l)
