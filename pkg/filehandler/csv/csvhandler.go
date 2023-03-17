@@ -12,6 +12,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 )
@@ -19,6 +20,8 @@ import (
 const (
 	bufferMaxLength = 32 * 1024
 )
+
+var nonAlphanumericRegex = regexp.MustCompile(`[^a-zA-Z0-9 ]+`)
 
 type csvHandler struct {
 	mx          sync.Mutex
@@ -66,7 +69,7 @@ func (c *csvHandler) Import() error {
 	wg.Add(len(c.files))
 	errChannels = make(chan error, len(c.files))
 	for _, file := range c.files {
-		tableName := strings.ReplaceAll(strings.ToLower(filepath.Base(file.Name())), filepath.Ext(file.Name()), "")
+		tableName := c.formatTableName(file)
 		go func(wg *sync.WaitGroup, file *os.File, tableName string, errChan chan error) {
 			defer wg.Done()
 			errChan <- c.loadDataFromFile(tableName, file)
@@ -79,6 +82,13 @@ func (c *csvHandler) Import() error {
 	}
 
 	return nil
+}
+
+// formatTableName format table name by removing invalid characters
+func (c *csvHandler) formatTableName(file *os.File) string {
+	tableName := strings.ReplaceAll(strings.ToLower(filepath.Base(file.Name())), filepath.Ext(file.Name()), "")
+	tableName = strings.ReplaceAll(tableName, " ", "_")
+	return nonAlphanumericRegex.ReplaceAllString(tableName, "")
 }
 
 // Query execute statements

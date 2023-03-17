@@ -76,11 +76,11 @@ func (c *csvql) Run() error {
 
 	rows, err := c.storage.ShowTables()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to list tables: %w", err)
 	}
 
 	if err := c.printResult(rows); err != nil {
-		return fmt.Errorf("failed to list tables: %w", err)
+		return fmt.Errorf("failed to print tables: %w", err)
 	}
 
 	return c.execute()
